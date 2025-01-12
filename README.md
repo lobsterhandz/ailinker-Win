@@ -190,4 +190,3 @@ Currently only supports OpenAI SDK-compatible services, but some vendors' compat
 * v0.3.11 - Updated queue buffer size and control data sending frequency
 * v0.3.02 - Modified ASR node configuration, audio not saved by default
 * v0.3.01 - Updated ASR single request data size 
-
