@@ -1,0 +1,111 @@
+/* 全局样式重置 */
+* {
+    margin: 0;          /* 清除所有元素的外边距 */
+    padding: 0;         /* 清除所有元素的内边距 */
+    box-sizing: border-box;  /* 使元素的内边距和边框包含在宽度和高度内 */
+}
+
+/* 页面基本样式 */
+body {
+    font-family: Arial, sans-serif;  /* 设置全局字体 */
+    background-color: #f0f2f5;       /* 设置页面背景色为浅灰色 */
+}
+
+/* 主容器样式 - 用于左右布局 */
+.container {
+    display: flex;           /* 使用弹性布局 */
+    min-height: 100vh;       /* 最小高度为视窗高度 */
+}
+
+/* 左侧面板样式 */
+.left-panel {
+    width: 40%;             /* 占据40%的宽度 */
+    padding: 20px;          /* 内部填充20像素 */
+    background-color: #ffffff;  /* 背景色为白色 */
+    box-shadow: 2px 0 5px rgba(0,0,0,0.1);  /* 添加阴影效果 */
+    height: 100vh;          /* 高度为视窗高度 */
+    overflow-y: auto;       /* 内容超出时显示垂直滚动条 */
+}
+
+/* 右侧面板样式 */
+.right-panel {
+    width: 60%;             /* 占据60%的宽度 */
+    padding: 20px;          /* 内部填充20像素 */
+    background-color: #f8fafc;  /* 背景色为浅蓝灰色 */
+    height: 100vh;          /* 高度为视窗高度 */
+    overflow-y: auto;       /* 内容超出时显示垂直滚动条 */
+}
+
+/* 状态卡片样式 - 用于显示设备状态和参数设置 */
+.status-card {
+    background: #f8fafc;    /* 背景色为浅蓝灰色 */
+    padding: 15px;          /* 内部填充15像素 */
+    border-radius: 8px;     /* 圆角边框 */
+    margin-bottom: 20px;    /* 底部外边距20像素 */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);  /* 添加柔和的阴影效果 */
+}
+
+/* 聊天容器样式 - 右侧聊天记录显示区域 */
+.chat-container {
+    height: calc(100vh - 80px);  /* 高度为视窗高度减去80像素（留出标题空间） */
+    overflow-y: auto;            /* 内容超出时显示垂直滚动条 */
+    background: #ffffff;         /* 背景色为白色 */
+    border-radius: 8px;          /* 圆角边框 */
+    padding: 20px;               /* 内部填充20像素 */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);  /* 添加柔和的阴影效果 */
+}
+
+/* 聊天消息样式 - 单条消息的样式 */
+.chat-message {
+    margin-bottom: 15px;     /* 底部外边距15像素 */
+    padding: 10px;           /* 内部填充10像素 */
+    border-radius: 4px;      /* 圆角边框 */
+    background-color: #eef2ff;  /* 背景色为淡紫色 */
+}
+
+/* 设备状态样式 */
+.device-status {
+    padding: 10px;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+/* 在线状态指示 */
+.status-dot {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background-color: #ff4444;  /* 离线状态为红色 */
+    margin-right: 8px;
+    display: inline-block;
+}
+
+.status-dot.online {
+    background-color: #00C851;  /* 在线状态为绿色 */
+}
+
+.status-text {
+    font-size: 14px;
+    color: #333;
+}
+
+.device-name {
+    display: flex;
+    align-items: center;
+}
+
+.device-name .label {
+    font-size: 16px;
+    color: #666;
+    margin-right: 8px;
+}
+
+.device-name .value {
+    font-size: 14px;
+    color: #333;
+    font-weight: 500;
+} 

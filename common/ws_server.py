@@ -1,4 +1,3 @@
-
 #coding=utf-8
 from collections import deque
 import tornado.web
@@ -18,6 +17,11 @@ class WsServerBase(WebSocketHandler):
     """tornado websocket server
     Args: 
     """
+    # 当前连接
+    active_connections = 0
+    # 最大连接
+    max_connections = 1
+
     def initialize(self, send_que: deque, receive_que: deque, que_max_len, close_event: asyncio.Event):
         """连接初始化(每次连接成功会调用)
         """
@@ -49,16 +53,21 @@ class WsServerBase(WebSocketHandler):
     async def open(self):
         """ 连接成功回调
         """
-        # self.set_nodelay(True)  #小包发送,降低延迟（可能占用更多带宽）
+        if WsServerBase.active_connections >= WsServerBase.max_connections:
+            logger.warning('Connection refused: maximum number of connections reached.')
+            self.close()  # Close the connection if the limit is reached
+            return
 
+        WsServerBase.active_connections += 1
+        logger.info('ws connected. Active connections: {}'.format(WsServerBase.active_connections))
+
+        # self.set_nodelay(True)  #小包发送,降低延迟（可能占用更多带宽）
         # 启动异步定时器，每秒 n ms执行一次回调函数
         self.send_task = PeriodicCallback(self._send_callback, 50)
         self.send_task.start()
 
         self.close_task = PeriodicCallback(self._close_callback, 50)
         self.close_task.start()
-
-        logger.info('ws connected.')
 
 
     async def _send_callback(self):
@@ -104,7 +113,8 @@ class WsServerBase(WebSocketHandler):
     def on_close(self):
         """连接关闭回调
         """
-        logger.info('ws connection close.')
+        WsServerBase.active_connections -= 1
+        logger.info('ws connection close. Active connections: {}'.format(WsServerBase.active_connections))
         self._close()
 
 
@@ -159,4 +169,3 @@ class WsServer():
         """从ws接收缓冲区读取数据
         """
         return Udeque.read_deque(self.receive_que, pop)
-

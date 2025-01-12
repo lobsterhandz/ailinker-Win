@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AILINKER</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="left-panel">
+                <h2>设备状态</h2>
+                <div class="status-card">
+                    <div class="device-status">
+                        <div class="status-indicator">
+                            <span class="status-dot" :class="{ 'online': deviceStatus }"></span>
+                            <span class="status-text">[[ deviceStatus ? '在线' : '离线' ]]</span>
+                        </div>
+                        <div class="device-name">
+                            <span class="label">设备：</span>
+                            <span class="value">[[ deviceName ]]</span>
+                        </div>
+                    </div>
+                </div>
+
+                <h2>参数设置</h2>
+                <div class="status-card">
+                    <p>参数设置区域</p>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <h2>聊天记录</h2>
+                <div class="chat-container">
+                    <div class="chat-message">
+                        示例消息1
+                    </div>
+                    <div class="chat-message">
+                        示例消息2
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue
+
+        createApp({
+            delimiters: ['[[', ']]'],
+            data() {
+                return {
+                    messages: [],
+                    deviceStatus: false,
+                    deviceName: '加载中...'
+                }
+            },
+            methods: {
+                async fetchDeviceInfo() {
+                    try {
+                        const response = await fetch('/api/device/info');
+                        const data = await response.json();
+                        this.deviceName = data.name;
+                        this.deviceStatus = data.status;
+                    } catch (error) {
+                        console.error('获取设备信息失败:', error);
+                    }
+                }
+            },
+            mounted() {
+                // 组件挂载后获取设备信息
+                this.fetchDeviceInfo();
+                
+                // 可选：定期刷新设备状态（每5秒刷新一次）
+                setInterval(() => {
+                    this.fetchDeviceInfo();
+                }, 5000);
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>

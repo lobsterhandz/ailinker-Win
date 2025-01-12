@@ -25,7 +25,6 @@ from common.ws_server import WsServer
 from mq_base_node import MqBaseNode, mq_close
 
 
-
 class Bridge(MqBaseNode):
     """ws-rabitmq桥接,数据转发
     TODO: 当前收发消息缓存区共用, 只支持单设备连接, 后续改进根据设备ID区分, 加入多设备支持。
@@ -125,17 +124,6 @@ class Bridge(MqBaseNode):
                 else:
                     self._ws.auto_send(mq_msg_str)
 
-    ''''
-    def keyboard_control(self):
-       """control task.
-       """
-       if self.keyboard.kbhit():
-           key_value = ord(self.keyboard.getch())
-           if key_value == ord('q'): 
-               logger.info('keyboard exit.')
-               self.close()
-    '''
-
     @mq_close
     def close(self):
         """关闭节点
@@ -144,7 +132,6 @@ class Bridge(MqBaseNode):
         self._ws_thread.join()
         self.node_exit = True
         logger.info('app exit')
-
 
 #---------------------main--------------------------
 def main(config: dict):
@@ -171,4 +158,3 @@ if __name__=='__main__':
         config = json.load(load_f)
         logger.info(config)
         main(config)
-
