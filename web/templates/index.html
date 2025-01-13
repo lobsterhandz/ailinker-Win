@@ -16,8 +16,8 @@
                 <div class="status-card">
                     <div class="device-status">
                         <div class="status-indicator">
-                            <span class="status-dot" :class="{ 'online': deviceStatus }"></span>
-                            <span class="status-text">[[ deviceStatus ? '在线' : '离线' ]]</span>
+                            <!-- <span class="status-dot" :class="{ 'online': deviceStatus }"></span> -->
+                            <!-- <span class="status-text">[[ deviceStatus ? '在线' : '离线' ]]</span> -->
                         </div>
                         <div class="device-name">
                             <span class="label">设备：</span>
@@ -74,10 +74,10 @@
                 // 组件挂载后获取设备信息
                 this.fetchDeviceInfo();
                 
-                // 可选：定期刷新设备状态（每5秒刷新一次）
+                // 可选：定期刷新设备状态（每3秒刷新一次）
                 setInterval(() => {
                     this.fetchDeviceInfo();
-                }, 5000);
+                }, 3000);
             }
         }).mount('#app')
     </script>

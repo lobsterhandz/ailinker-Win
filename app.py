@@ -11,7 +11,7 @@ STATUS_RUNNING = 1
 # Get work and config paths
 WORK_PATH = os.environ.get("AILINKER_WORK_PATH", None)
 if WORK_PATH is None:
-    logger.error("get work path fail!")
+    logger.error("get work path fail, please execute: source env_setup.bash")
     exit(1)
 CONFIG_PATH = WORK_PATH + "/configs/config"
 

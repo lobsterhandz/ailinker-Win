@@ -18,6 +18,9 @@
 * docs       # Related documentation
 * README.md  
 
+### 1.3 Supported Hardware
+* [AI-VOICE-Z01(Z02)](https://gitee.com/yumoutech/ai-devices/tree/master/ai-voice-z01)
+
 ## 2. Software Installation
 ### 2.1 System Software Installation
 &nbsp;&nbsp;The software runs on Linux systems. Our test environment is Ubuntu 22.04, and we recommend beginners use the same version. <br>
@@ -117,9 +120,7 @@ $ source env_setup.bash
 $ python app.py
 ```
 
-1. After the backend service starts, you can first access it using a computer browser. A successful access will return the following page:
-
-![Alt text](./pics/后端部署成功返回01.png)
+1. After the backend service starts, you can first access it using a computer browser. You will enter the backend management page (note that the page is still being updated, but this doesn't affect device usage).
 
 2. If you have configured the board's IP and port information, restart the board and it will automatically connect to the service. Upon successful connection, the board's LED will flash purple. You can then try to wake up the device to start chatting.
 
@@ -183,7 +184,7 @@ Currently only supports OpenAI SDK-compatible services, but some vendors' compat
 | iFlytek Speech Synthesis      | Testing   |                                                              |                                                  |                                |
 
 ## More Information
-* [Frequently Asked Questions (FAQ)](./docs/FAQ.md)
+* [Frequently Asked Questions (FAQ)](./docs/FAQ.en.md)
 
 ## Version History
 * v0.3.12 - Latest version

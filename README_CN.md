@@ -1,6 +1,6 @@
 # AiLinker
 
-**请点击上方的README.md文件查看具体文档**
+[English](README.md) | [中文](README_CN.md)
 
 ## 简介
 ### 1.1 系统特点
@@ -17,6 +17,9 @@
 * deploy     #应用部署和后台运行文件目录
 * docs       #相关说明文档
 * README.md  
+
+### 1.3 支持的硬件
+* [AI-VOICE-Z01(Z02)](https://gitee.com/yumoutech/ai-devices/tree/master/ai-voice-z01)
 
 ## 2.软件安装
 ### 2.1 系统软件安装
@@ -118,10 +121,7 @@ $ source env_setup.bash
 $ python app.py
 ```
 
-1.后端服务启动后可以先用电脑浏览器进行访问，能正常访问会返回以下页面。
-
-![Alt text](./pics/后端部署成功返回01.png)
-
+1.后端服务启动后可以先用电脑浏览器进行访问，会进入后台管理页面(注意页面还在更新中,不影响设备使用)。
 
 2.此时如果已经配置好板子的IP和端口信息，重启板子就会看到板子自动连接到服务，连接成功后，板子LED为紫灯闪烁, 此时可以尝试唤醒设备开始聊天。
 
