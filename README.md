@@ -6,7 +6,7 @@
 ## 🔄 Summary of Changes
 - **Switched from Linux to Windows** for development.
 - **Added sentiment analysis** using DistilBERT.
-- **Integrated DeepSeek and other Hugging Face models** for AI flexibility.
+- **Integrated DeepSeek or other Hugging Face models** for AI flexibility.
 - **Implemented ESP32 eye controller** linked to chatbot responses.
 - **Updated API routes and WebSocket** for successful chatbot communication with dual LCD eyes.
 
