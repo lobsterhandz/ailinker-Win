@@ -1,164 +1,227 @@
 # coding=utf-8
-# 在线Chat节点
+## coding=utf-8
+# node_chat.py
+
 import sys
-# import base64
 import json
 from time import sleep
 from collections import deque
-import threading
 
-#1.日志系统初始化,配置log等级
+import torch
+from transformers import pipeline
+import websocket
+
+# 1. 日志系统初始化
 from utility import mlogging
 mlogging.logger_config('chat', mlogging.INFO, False)
-#2.导入logger模块
 from utility.mlogging import logger
-# from utility.keyboard import KBHit
-
 
 from mq_base_node import MqBaseNode, mq_close
-from chat.openai_chat import OpenAIChat
 
+# =================================
+# Optional: Separate chat wrappers
+# =================================
+class OpenAIChat:
+    """Mock example to preserve interface from original code."""
+    def __init__(self, config):
+        self.config = config
+        # In reality, you'd call openai API here with self.config["model"], etc.
+    def get_response_stream(self, text):
+        # Example generator
+        yield {"seq": 1, "text": f"[OpenAIChat Stream] {text}"}
+    def get_response(self, text):
+        return {"seq": 1, "text": f"[OpenAIChat Non-Stream] {text}"}
+    def decode_chunk(self, chunk):
+        return chunk
 
+class HuggingFaceChat:
+    """Local Hugging Face wrapper."""
+    def __init__(self, config):
+        device = 0 if torch.cuda.is_available() else -1
+        self.text_pipeline = pipeline("text-generation", 
+                                      model=config.get("model", "gpt2"), 
+                                      device=device)
+        self.sentiment_pipeline = pipeline("sentiment-analysis", device=device)
+    def get_response_stream(self, text):
+        # If you have a streaming approach, you'd chunk the outputs.
+        # For demo, just yield one chunk.
+        result = self.text_pipeline(text, max_length=50, truncation=True)[0]['generated_text']
+        yield {"seq": 1, "text": result}
+    def get_response(self, text):
+        result = self.text_pipeline(text, max_length=50, truncation=True)[0]['generated_text']
+        return {"seq": 1, "text": result}
+    def decode_chunk(self, chunk):
+        return chunk
+    def analyze_sentiment(self, text):
+        sentiment = self.sentiment_pipeline(text)[0]['label']  # 'POSITIVE'/'NEGATIVE'/'NEUTRAL' (as 'NEUTRAL' sometimes becomes 'POSITIVE' or 'NEGATIVE')
+        return sentiment
+
+class DeepSeekChat:
+    """DeepSeek local model wrapper."""
+    def __init__(self, config):
+        device = 0 if torch.cuda.is_available() else -1
+        self.text_pipeline = pipeline("text-generation", 
+                                      model=config.get("model", "./models/phi-2"),
+                                      device=device)
+        self.sentiment_pipeline = pipeline("sentiment-analysis", device=device)
+    def get_response_stream(self, text):
+        result = self.text_pipeline(text, max_length=50, truncation=True)[0]['generated_text']
+        yield {"seq": 1, "text": result}
+    def get_response(self, text):
+        result = self.text_pipeline(text, max_length=50, truncation=True)[0]['generated_text']
+        return {"seq": 1, "text": result}
+    def decode_chunk(self, chunk):
+        return chunk
+    def analyze_sentiment(self, text):
+        sentiment = self.sentiment_pipeline(text)[0]['label']
+        return sentiment
+
+# =================================
+# The ChatNode
+# =================================
 class ChatNode(MqBaseNode):
-    """chat节点
-    """
     def __init__(self, config: dict):
-        """初始化
-        Args:
-            config  app参数配置信息
-        """
+        super().__init__(config['rabbitmq'])
         self.chat_config = config['chat']
 
-        #---------------rabbitmq------------------
-        super().__init__(config['rabbitmq']) 
-
+        # Max queue length
         self.que_max_len = 5000
         self.set_que_max_len(self.que_max_len)
 
-        #-----------------------------------------
-        # 键盘控制
-        # self.keyboard = KBHit()
+        # Chat session trackers
+        self.chat_id = 0
+        self.cancel_chat_id = -1
         self.node_exit = False
 
-        self.chat = OpenAIChat(self.chat_config)
+        # Decide which chat implementation to load
+        service = self.chat_config.get("service", "openai").lower()
+        if service == "huggingface":
+            logger.info("👉 Using HuggingFaceChat for local inference.")
+            self.chat_impl = HuggingFaceChat(self.chat_config.get("huggingface", {}))
+        elif service == "":
+            logger.info("👉 Using PHI-2 for local inference.")
+            self.chat_impl = DeepSeekChat(self.chat_config.get("deepseek", {}))
+        else:
+            logger.info("👉 Using OpenAIChat (original).")
+            self.chat_impl = OpenAIChat(self.chat_config.get("openai", {}))
 
-        ## 本轮聊天ID
-        self.chat_id = 0
-        ## 取消的聊天ID
-        self.cancel_chat_id = -1
-
-    '''
-    def keyboard_control(self):
-        """control task.
-        """
-        if self.keyboard.kbhit():
-            key_value = ord(self.keyboard.getch())
-            if key_value == ord('q'): 
-                logger.info('keyboard exit.')
-                self.close()
-    '''
+        # Optionally set up a separate pipeline or rely on self.chat_impl's sentiment method
+        self.enable_eye_animations = self.chat_config.get("enable_eyes", False)
+        self.esp32_ws_url = self.chat_config.get("esp32_ws_url", "ws://<ESP32-IP>:<PORT>")
 
     @mq_close
     def close(self):
-        """关闭节点
-        """
         self.node_exit = True
-        logger.info('app exit')
+        logger.info("🔴 Chat node shutting down...")
 
-    
     def create_answer_msg(self, msg: dict, chat_id: int):
-        """创建聊天响应消息
-        Args:
-            msg, 聊天响应消息
-        """
-        data_obj = {
+        return {
             'node': "chat",
             'topic': "chat/answer",
             'type': "json",
-            'data':{
+            'data': {
                 'chat_id': chat_id,
                 'seq': msg['seq'],
                 'text': msg['text'],
-            }    
+            }
         }
-        return data_obj
-
 
     def handle_mq_msg(self, msg: dict, stream=True):
-        """mq 消息处理, 根据请求执行相应操作
-        Args: 
-            msg  从订阅节点接收到的消息
-            stream 是否启动流失响应
-        TODO: 增加聊天打断检测
         """
-        logger.debug("got mq msg, topic: {}".format(msg['topic']))
-        topic = msg['topic']
-
+        We keep the original logic:
+         - check for cancel
+         - handle asr/response
+         - optionally do streaming
+        """
+        topic = msg.get('topic', '')
         if topic == 'request/cancel':
             self.cancel_chat_id = msg['data']['chat_id']
-            logger.info('receive cancel signal,current chat_id: {}, cancel chat_id: {}'.format(self.chat_id, self.cancel_chat_id))
-
+            logger.info(f'Received cancel signal. Current chat_id={self.chat_id}, cancel_chat_id={self.cancel_chat_id}')
         elif topic == 'asr/response':
-            logger.debug(msg)
             text = msg['data']['text']
             self.chat_id = msg['data']['chat_id']
-            logger.info('user: {}'.format(text))
+            logger.info(f'🎤 User: {text}')
 
-            ## 判断是否为取消的ID,如果是则不进行chat请求
+            # Check if canceled
             if self.chat_id <= self.cancel_chat_id:
-                logger.info('this chat already cancel, chat_id: {}, cancel chat_id: {}'.format(self.chat_id, self.cancel_chat_id))
+                logger.info(f'⚠️ Chat {self.chat_id} canceled (<= {self.cancel_chat_id}). Skipping.')
                 return
 
             if stream:
-                ## 流式对话
-                reponse = self.chat.get_response_stream(text)
-                for chunk in reponse:
-                    answer_msg = self.chat.decode_chunk(chunk)
+                # Streamed approach
+                response_stream = self.chat_impl.get_response_stream(text)
+                for chunk in response_stream:
+                    answer_msg = self.chat_impl.decode_chunk(chunk)  # from original code
                     if answer_msg is not None:
-                        logger.info("{:2} {}".format(answer_msg['seq'], answer_msg['text']))
+                        logger.info(f"🤖 AI (stream seq={answer_msg['seq']}): {answer_msg['text']}")
                         self.auto_send(self.create_answer_msg(answer_msg, self.chat_id))
+                        # optional sentiment per chunk
+                        if self.enable_eye_animations:
+                            sentiment = self.chat_impl.analyze_sentiment(answer_msg['text'])
+                            self.send_emotion_to_eyes(sentiment)
             else:
-                answer_msg = self.chat.get_response(text)
-                logger.info("{:2} {}".format(answer_msg['seq'], answer_msg['text']))
+                # Non-streamed approach
+                answer_msg = self.chat_impl.get_response(text)
+                logger.info(f"🤖 AI: {answer_msg['text']}")
                 self.auto_send(self.create_answer_msg(answer_msg, self.chat_id))
 
+                # Eye animations
+                if self.enable_eye_animations:
+                    sentiment = self.chat_impl.analyze_sentiment(answer_msg['text'])
+                    self.send_emotion_to_eyes(sentiment)
+
+    def send_emotion_to_eyes(self, sentiment):
+        """Sends an emotion-based eye animation command to ESP32 via WebSocket."""
+        emotion = self.map_emotion_to_eyes(sentiment)
+        logger.info(f"👀 Sending emotion to ESP32: {emotion}")
+
+        try:
+            ws = websocket.WebSocket()
+            ws.connect(self.esp32_ws_url)
+            ws.send(json.dumps({"emotion": emotion}))
+            ws.close()
+        except Exception as e:
+            logger.error(f"❌ ERROR sending eye animation: {e}")
+
+    @staticmethod
+    def map_emotion_to_eyes(sentiment_label):
+        emotion_map = {
+            "POSITIVE": "HAPPY",
+            "NEGATIVE": "SAD",
+            "NEUTRAL": "NEUTRAL"
+        }
+        # If the pipeline sometimes returns something like "LABEL_1", you might need a small fix here.
+        # For now, assume it returns "POSITIVE", "NEGATIVE", or "NEUTRAL".
+        return emotion_map.get(sentiment_label.upper(), "NEUTRAL")
 
     def launch(self):
-        """循环任务
-        """
-        ## 启动rabitmq transport线程
         self.transport_start()
-
         while not self.node_exit:
-            sleep(0.001)
-            # self.keyboard_control()
-            ## 读取rabitmq数据
+            # read from MQ
             mq_msg = self.auto_read()
-            if mq_msg is not None:
-                self.handle_mq_msg(mq_msg)
+            if mq_msg:
+                # Original code used 'stream=True' by default
+                self.handle_mq_msg(mq_msg, stream=True)
+            sleep(0.001)
 
 
 def main(config: dict):
-    """入口函数
-    """
     chat_node = ChatNode(config)
     chat_node.launch()
 
 
-if __name__=='__main__':
-    """APP入口
-    """
-    logger.info('chat node start...')
-
-    #读取配置文件
+if __name__ == '__main__':
+    logger.info('🚀 Chat node starting...')
     if len(sys.argv) < 2:
-        logger.error('useage: config_file')
-        exit(0)
-
+        logger.error('❌ ERROR: Usage: python node_chat.py <config_file>')
+        sys.exit(1)
     config_file = sys.argv[1]
-    logger.info('config: %s', config_file)
-
-    with open(config_file, 'r', encoding='utf-8') as load_f:
-        config = json.load(load_f)
-        logger.info(config)
-        main(config)
+    logger.info(f'📄 Loading config: {config_file}')
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            logger.info(config)
+            main(config)
+    except Exception as e:
+        logger.error(f'❌ ERROR loading config: {e}')
+        sys.exit(1)

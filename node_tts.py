@@ -4,19 +4,24 @@ import sys
 import base64
 import json
 from time import sleep
-
 #1.日志系统初始化,配置log等级
 from utility import mlogging
 mlogging.logger_config('tts', mlogging.INFO, False)
 
-#2.导入logger模块
-from utility.mlogging import logger
+from transformers import pipeline
+from mq_base_node import MqBaseNode, mq_close
+import websocket
 # from utility.keyboard import KBHit
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("tts")
 
 from mq_base_node import MqBaseNode, mq_close
 from tts.volc_tts import VolcTTS
 from tts.xfai_tts import XFaiTTS
-
+# Load sentiment model
+sentiment_analyzer = pipeline("sentiment-analysis")
 
 class TTSNode(MqBaseNode):
     """tts节点
@@ -330,63 +335,93 @@ class TTSNode(MqBaseNode):
 
 
     def handle_mq_msg(self, msg: dict):
-        """mq消息处理, 根据请求执行相应操作
-        Args:
-            msg  从订阅节点接收到的消息
-        TODO: 对大模型返回的文本进行合并处理, 减少TTS请求的次数
-        """
-        logger.debug("got mq msg, topic: {}".format(msg['topic']))
+        """Handles Text-to-Speech (TTS) and Eye Animations.
 
-        ## 聊天取消信号
+        Args:
+            msg: Received message from RabbitMQ.
+        """
+        logger.debug("Received MQ message, topic: {}".format(msg['topic']))
+
+        ## Handle Chat Cancel Request
         if msg['topic'] == 'request/cancel':
             self.cancel_chat_id = msg['data']['chat_id']
-            logger.info('receive cancel signal,chat_id: {}, cancel chat_id: {}'.format(self.chat_id, self.cancel_chat_id))
+            logger.info(f'Received cancel signal, chat_id: {self.chat_id}, cancel_chat_id: {self.cancel_chat_id}')
+            return
 
-        ## 直接请求TTS
+        ## Direct TTS Request (Bypassing Chatbot)
         elif msg['topic'] == 'request/tts':
-            self.execute(msg['data']['text'], msg['data']['voice_type'])
+            self.execute(msg['data']['text'], msg['data'].get('voice_type'))
+            return
 
-        ## 处理聊天响应的文本
+        ## Process Chatbot Response for TTS & Eye Animation
         elif msg['topic'] == 'chat/answer':
             answer = msg['data']
-            # print(answer)
             answer_text = answer['text']
             self.chat_id = answer['chat_id']
-            logger.info('------------------current chat_id: {}----------------'.format(self.chat_id))
 
-            ## 如果聊天已经取消,则不进行处理
+            logger.info(f'Processing TTS for chat_id: {self.chat_id}')
+
+            ## If chat was canceled before processing, ignore
             if self.chat_id <= self.cancel_chat_id:
-                logger.info('this chat already cancel, chat_id: {}, cancel chat_id: {}'.format(self.chat_id, self.cancel_chat_id))
-                ## 清空对话数据缓存
+                logger.info(f'This chat was canceled, skipping TTS, chat_id: {self.chat_id}, cancel_chat_id: {self.cancel_chat_id}')
                 self.chat_answers = ''
-                ## TODO: 有可能已经处于TTS响应循环了，才收到取消指令，这种情况需要处理
                 return
 
-            ## 处理请求信息,请求TTS
+            # 🔥 New Feature: Analyze Sentiment for Eye Animations
+            sentiment = sentiment_analyzer(answer_text)[0]['label']
+            send_emotion_to_eyes(sentiment)
+
+            ## Handle TTS Processing
             if answer['seq'] >= 0:
-                # 前n句直接合成
+                # Process direct responses (first `direct_n` messages)
                 if answer['seq'] < self.direct_n:
                     self.execute(text=answer_text)
                 else:
-                    # 若已缓存消息加上新消息后字节数超过最大值，则先请求合成
+                    # Merge messages to reduce TTS requests
                     text_bytes_size = len(self.chat_answers.encode('utf-8')) + len(answer_text.encode('utf-8'))
-                    logger.info('tts text bytes: {}'.format(text_bytes_size))
+                    logger.info(f'TTS text buffer size: {text_bytes_size}')
+                    
                     if text_bytes_size > self._tts_text_bytes_max:
                         self.execute(text=self.chat_answers)
                         self.chat_answers = ''
-                    # 缓存消息
+                    
                     self.chat_answers += answer_text
 
-            else:  # seq小于0为结束 
+            else:  # **End of Conversation**
                 self.chat_answers += answer_text
-                if self.chat_answers == '':   # 特殊消息直接响应结束,不进行TTS请求
-                    msg = self.create_response_msg(self.chat_id, chat_end=1, seg_end = 1)
+
+                if not self.chat_answers:
+                    msg = self.create_response_msg(self.chat_id, chat_end=1, seg_end=1)
                     self.auto_send(msg)
                 else:
                     self.execute(text=self.chat_answers, end_sentence=True)
+
                 self.chat_answers = ''
 
 
+    @staticmethod
+    def send_emotion_to_eyes(sentiment):
+        """Send emotion-based eye animation to ESP32-S3."""
+        emotion = TTSNode.map_emotion_to_eyes(sentiment)
+        try:
+            ws = websocket.WebSocket()
+            ws.connect("ws://<ESP32-IP>:<PORT>")  # Replace with your ESP32’s IP and port
+            # Send as JSON for consistency with other nodes:
+            ws.send(json.dumps({"emotion": emotion}))
+            ws.close()
+        except Exception as e:
+            logger.error("Failed to send emotion to ESP32: {}".format(e))
+
+    @staticmethod
+    def map_emotion_to_eyes(sentiment):
+        """Map sentiment to ESP32 eye animations."""
+        if sentiment == "POSITIVE":
+            return "HAPPY"
+        elif sentiment == "NEGATIVE":
+            return "SAD"
+        else:
+            return "NEUTRAL"
+        
     def launch(self):
         """TTS主任务
         """

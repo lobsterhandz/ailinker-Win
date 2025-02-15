@@ -6,18 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AILINKER</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <!-- Vue.js -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    
+    <!-- Socket.io for future ESP32 hooks -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
 </head>
 <body>
     <div id="app">
+        <h1>[[ message ]]</h1>
+
         <div class="container">
+            <!-- Left Panel: Device Status -->
             <div class="left-panel">
-                <h2>设备状态</h2>
+                <h2>设备状态 (Device Status)</h2>
                 <div class="status-card">
                     <div class="device-status">
                         <div class="status-indicator">
-                            <!-- <span class="status-dot" :class="{ 'online': deviceStatus }"></span> -->
-                            <!-- <span class="status-text">[[ deviceStatus ? '在线' : '离线' ]]</span> -->
+                            <span class="status-dot" :class="{ 'online': deviceStatus }"></span>
+                            <span class="status-text">[[ deviceStatus ? '在线' : '离线' ]]</span>
                         </div>
                         <div class="device-name">
                             <span class="label">设备：</span>
@@ -26,60 +34,126 @@
                     </div>
                 </div>
 
-                <h2>参数设置</h2>
+                <h2>参数设置 (Settings)</h2>
                 <div class="status-card">
                     <p>参数设置区域</p>
                 </div>
             </div>
 
+            <!-- Right Panel: Chat -->
             <div class="right-panel">
-                <h2>聊天记录</h2>
+                <h2>聊天记录 (Chat History)</h2>
                 <div class="chat-container">
-                    <div class="chat-message">
-                        示例消息1
-                    </div>
-                    <div class="chat-message">
-                        示例消息2
+                    <div v-for="(msg, index) in messages" :key="index" class="chat-message">
+                        [[ msg ]]
                     </div>
                 </div>
+
+                <input type="text" v-model="userMessage" @keyup.enter="sendMessage" placeholder="Type a message...">
+                <button @click="sendMessage">Send</button>
             </div>
         </div>
+
+        <!-- Emotion Control Buttons -->
+        <h2>发送情绪 (Send Emotion)</h2>
+        <button @click="sendEmotion('HAPPY')">😊 Happy</button>
+        <button @click="sendEmotion('SAD')">😢 Sad</button>
+        <button @click="sendEmotion('NEUTRAL')">😐 Neutral</button>
     </div>
 
     <script>
-        const { createApp } = Vue
+        const { createApp } = Vue;
 
         createApp({
-            delimiters: ['[[', ']]'],
+            delimiters: ['[[', ']]'],  // Avoids Jinja2 conflicts
             data() {
                 return {
+                    message: "AILINKER is live!",
                     messages: [],
                     deviceStatus: false,
-                    deviceName: '加载中...'
-                }
+                    deviceName: '加载中...',  // Loading...
+                    userMessage: '',
+                    websocketConnected: false,
+                    ws: null  // WebSocket instance
+                };
             },
             methods: {
+                // Fetch device info from Flask API (Original ESP32 Behavior)
                 async fetchDeviceInfo() {
                     try {
                         const response = await fetch('/api/device/info');
+                        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
                         const data = await response.json();
                         this.deviceName = data.name;
                         this.deviceStatus = data.status;
                     } catch (error) {
-                        console.error('获取设备信息失败:', error);
+                        console.error('❌ 获取设备信息失败:', error);
+                        this.deviceStatus = false; // Assume offline if fetch fails
                     }
+                },
+
+                // Send chat message to Flask API
+                async sendMessage() {
+                    if (!this.userMessage.trim()) return;
+
+                    try {
+                        const response = await fetch('/api/chat', {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ message: this.userMessage })
+                        });
+
+                        const data = await response.json();
+                        this.messages.push(`You: ${this.userMessage}`);
+                        this.messages.push(`AI: ${data.response}`);
+                        this.userMessage = "";
+                    } catch (error) {
+                        console.error("❌ Chat Error:", error);
+                    }
+                },
+
+                // Send emotion to ESP32 via WebSocket
+                sendEmotion(emotion) {
+                    if (!this.websocketConnected) {
+                        console.warn("⚠️ WebSocket not connected!");
+                        return;
+                    }
+                    this.ws.emit("eye_animation", { emotion: emotion });
+                    console.log(`📡 Sent emotion: ${emotion}`);
+                },
+
+                // Initialize WebSocket (For Eye Animation Hook - Future)
+                setupWebSocket() {
+                    let wsUrl = `ws://${window.location.hostname}:8090/ws/eyes`;
+                    console.log(`🟢 Connecting WebSocket: ${wsUrl}`);
+
+                    this.ws = io(wsUrl);
+
+                    this.ws.on("connect", () => {
+                        console.log("🟢 WebSocket Connected!");
+                        this.websocketConnected = true;
+                    });
+
+                    this.ws.on("disconnect", () => {
+                        console.log("🔴 WebSocket Disconnected!");
+                        this.websocketConnected = false;
+                    });
+
+                    this.ws.on("eye_animation", (data) => {
+                        console.log("👀 Eye Animation Received:", data);
+                    });
+
+                    this.ws.on("connect_error", (error) => {
+                        console.error("❌ WebSocket Connection Error:", error);
+                    });
                 }
             },
             mounted() {
-                // 组件挂载后获取设备信息
                 this.fetchDeviceInfo();
-                
-                // 可选：定期刷新设备状态（每3秒刷新一次）
-                setInterval(() => {
-                    this.fetchDeviceInfo();
-                }, 3000);
+                setInterval(this.fetchDeviceInfo, 5000); // Refresh device status every 5 seconds
+                this.setupWebSocket(); // Initialize WebSocket for future hooks
             }
-        }).mount('#app')
+        }).mount('#app');
     </script>
 </body>
 </html>
