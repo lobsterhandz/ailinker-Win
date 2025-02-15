@@ -161,3 +161,6 @@ For further details, check the [FAQ](./docs/FAQ.en.md).
 * v0.3.02 - Modified ASR node configuration, audio not saved by default.
 * v0.3.01 - Updated ASR single request data size.
 
+  ## Whats Next?
+  * add blueprints for routes
+
