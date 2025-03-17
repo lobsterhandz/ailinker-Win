@@ -10,7 +10,7 @@
 - **Implemented ESP32 eye controller** linked to chatbot responses.
 - **Updated API routes and WebSocket** for successful chatbot communication with dual LCD eyes.
 
-📌 **Final Outcome:** Faster, more interactive AI assistant with seamless ESP32 integration.
+ **Final Outcome:** Faster, more interactive AI assistant with seamless ESP32 integration.
 
 
 ## Introduction
